@@ -1,0 +1,36 @@
+global proc AEtwistSolverTemplate(string $nodeName)
+{
+    
+    editorTemplate -beginScrollLayout;
+        
+        editorTemplate -beginLayout "Twist Solver Attributes" -collapse false;
+			
+			editorTemplate -addControl "operation";
+			editorTemplate -addControl "forwardAxis";
+            editorTemplate -addControl "upAxis";
+			editorTemplate -addControl "startOffsetAngle";
+			editorTemplate -addControl "endOffsetAngle";
+			editorTemplate -addControl "inverseTwist";
+			editorTemplate -addControl "reverseTwist";
+			editorTemplate -addControl "segments";
+			editorTemplate -addControl "samples";
+			editorTemplate -addControl "falloffEnabled";
+        
+        editorTemplate -endLayout;
+		
+		AEaddRampControl( $nodeName + ".falloff" );
+		
+		editorTemplate -suppress "inputCurve";
+		editorTemplate -suppress "startMatrix";
+		editorTemplate -suppress "endMatrix";
+		editorTemplate -suppress "twist";
+		editorTemplate -suppress "restMatrix";
+		editorTemplate -suppress "buffer";
+		
+        AEdependNodeTemplate $nodeName;
+        
+        editorTemplate -addExtraControls;
+        
+    editorTemplate -endScrollLayout;
+    
+}
