@@ -36,7 +36,7 @@ MObject TwistSolver::twist;
 MObject TwistSolver::roll;
 MObject	TwistSolver::local;
 
-MTypeId TwistSolver::id(0x00131802);
+MTypeId TwistSolver::id(0x0013b1c1);
 
 
 TwistSolver::TwistSolver() {}
