@@ -92,10 +92,8 @@ public:
 	static	MStatus			composeMatrix(const Axis forwardAxis, const MVector& forwardVector, const Axis upAxis, const MVector& upVector, MMatrix& matrix);
 	static	MMatrix			composeMatrix(const MVector& x, const MVector& y, const MVector& z, const MPoint& pos);
 
-	static	MStatus			createRotationMatrix(const Axis forwardAxis, const MAngle angle, MMatrix& matrix);
-
 	static	MStatus			createCurveData(const MPoint& startPoint, const MVector& startVector, const MPoint& endPoint, const MVector& endVector, MObject &curveData);
-	static	MStatus			transportVector(const MObject& curve, MVector &transport, MVector &tangent, const int samples);
+	static	MStatus			transportVector(const MObject& curve, MVector &transport, MVector &tangent);
 	virtual	MDoubleArray	distributeRoll(const double roll, const unsigned int segments, const bool reverse);
 
 	static	double			degToRad(const double degrees);
@@ -110,14 +108,13 @@ public:
 	static  MObject			forwardAxis;
 	static  MObject			upAxis;
 	static  MObject			startMatrix;
-	static	MObject			startOffsetAngle;
+	static  MObject			startOffsetMatrix;
 	static  MObject			endMatrix;
-	static	MObject			endOffsetAngle;
-	static  MObject			inputCurve;
-	static  MObject			samples;
+	static	MObject			endOffsetMatrix;
+	static  MObject			inCurve;
 	static	MObject			segments;
-	static	MObject			inverseTwist;
-	static	MObject			reverseTwist;
+	static	MObject			inverse;
+	static	MObject			reverse;
 	static  MObject			falloff;
 	static  MObject			falloffEnabled;
 	static	MObject			restMatrix; // Internal tracker attributes

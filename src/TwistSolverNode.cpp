@@ -12,14 +12,13 @@ MObject TwistSolver::operation;
 MObject TwistSolver::forwardAxis;
 MObject TwistSolver::upAxis;
 MObject TwistSolver::startMatrix;
-MObject TwistSolver::startOffsetAngle;
+MObject TwistSolver::startOffsetMatrix;
 MObject TwistSolver::endMatrix;
-MObject TwistSolver::endOffsetAngle;
-MObject	TwistSolver::inputCurve;
-MObject	TwistSolver::samples;
+MObject TwistSolver::endOffsetMatrix;
+MObject	TwistSolver::inCurve;
 MObject	TwistSolver::segments;
-MObject	TwistSolver::inverseTwist;
-MObject	TwistSolver::reverseTwist;
+MObject	TwistSolver::inverse;
+MObject	TwistSolver::reverse;
 MObject TwistSolver::falloff;
 MObject TwistSolver::falloffEnabled;
 MObject TwistSolver::restMatrix;
@@ -80,31 +79,28 @@ Only these values should be used when performing computations!
 		MDataHandle startMatrixHandle = data.inputValue(TwistSolver::startMatrix, &status);
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 
-		MDataHandle startOffsetAngleHandle = data.inputValue(TwistSolver::startOffsetAngle, &status);
+		MDataHandle startOffsetMatrixHandle = data.inputValue(TwistSolver::startOffsetMatrix, &status);
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 
 		MDataHandle endMatrixHandle = data.inputValue(TwistSolver::endMatrix, &status);
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 
-		MDataHandle endOffsetAngleHandle = data.inputValue(TwistSolver::endOffsetAngle, &status);
+		MDataHandle endOffsetMatrixHandle = data.inputValue(TwistSolver::endOffsetMatrix, &status);
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 
 		MDataHandle operationHandle = data.inputValue(TwistSolver::operation, &status);
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 
-		MDataHandle inputCurveHandle = data.inputValue(TwistSolver::inputCurve, &status);
-		CHECK_MSTATUS_AND_RETURN_IT(status);
-
-		MDataHandle samplesHandle = data.inputValue(TwistSolver::samples, &status);
+		MDataHandle inCurveHandle = data.inputValue(TwistSolver::inCurve, &status);
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 
 		MDataHandle segmentsHandle = data.inputValue(TwistSolver::segments, &status);
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 
-		MDataHandle inverseTwistHandle = data.inputValue(TwistSolver::inverseTwist, &status);
+		MDataHandle inverseHandle = data.inputValue(TwistSolver::inverse, &status);
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 
-		MDataHandle reverseTwistHandle = data.inputValue(TwistSolver::reverseTwist, &status);
+		MDataHandle reverseHandle = data.inputValue(TwistSolver::reverse, &status);
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 
 		MDataHandle falloffEnabledHandle = data.inputValue(TwistSolver::falloffEnabled, &status);
@@ -118,40 +114,21 @@ Only these values should be used when performing computations!
 
 		// Get data values
 		//
-		MMatrix startMatrix = startMatrixHandle.asMatrix();
-		MAngle startOffsetAngle = startOffsetAngleHandle.asAngle();
-
-		MMatrix endMatrix = endMatrixHandle.asMatrix();
-		MAngle endOffsetAngle = endOffsetAngleHandle.asAngle();
-
 		Axis forwardAxis = Axis(forwardAxisHandle.asShort());
 		Axis upAxis = Axis(upAxisHandle.asShort());
 		Operation operation = Operation(operationHandle.asShort());
-
-		int samples = samplesHandle.asShort();
-		int segments = segmentsHandle.asShort();
-
-		bool inverse = inverseTwistHandle.asBool();
-		bool reverse = reverseTwistHandle.asBool();
-
+		short segments = segmentsHandle.asShort();
+		bool inverse = inverseHandle.asBool();
+		bool reverse = reverseHandle.asBool();
 		bool falloffEnabled = falloffEnabledHandle.asBool();
+		
+		MMatrix startOffsetMatrix = startOffsetMatrixHandle.asMatrix();
+		MMatrix startMatrix = startOffsetMatrix * startMatrixHandle.asMatrix();
+		MMatrix endOffsetMatrix = endOffsetMatrixHandle.asMatrix();
+		MMatrix endMatrix = endOffsetMatrix * endMatrixHandle.asMatrix();
 
 		MMatrix restMatrix = restMatrixHandle.asMatrix();
 		double buffer = bufferHandle.asDouble();
-
-		// Offset input matrices
-		//
-		MMatrix startOffsetMatrix, endOffsetMatrix; 
-		
-		status = TwistSolver::createRotationMatrix(forwardAxis, startOffsetAngle, startOffsetMatrix);
-		CHECK_MSTATUS_AND_RETURN_IT(status);
-
-		startMatrix = startOffsetMatrix * startMatrix;
-
-		status = TwistSolver::createRotationMatrix(forwardAxis, endOffsetAngle, endOffsetMatrix);
-		CHECK_MSTATUS_AND_RETURN_IT(status);
-
-		endMatrix = endOffsetMatrix * endMatrix;
 
 		// Extract twist vectors
 		//
@@ -162,12 +139,12 @@ Only these values should be used when performing computations!
 		MPoint startPoint = MPoint(startMatrix[3]);
 		MPoint endPoint = MPoint(endMatrix[3]);
 
-		// Check if ".inputCurve" has a connection
+		// Check if ".inCurve" has a connection
 		//
 		MObject node = this->thisMObject();
-		MPlug inputCurvePlug(node, TwistSolver::inputCurve);
+		MPlug inCurvePlug(node, TwistSolver::inCurve);
 
-		bool isConnected = inputCurvePlug.isConnected(&status);
+		bool isConnected = inCurvePlug.isConnected(&status);
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 
 		MObject curve;
@@ -175,9 +152,9 @@ Only these values should be used when performing computations!
 		if (isConnected) 
 		{
 
-			// Get MObject from data handle
+			// Get curve data from data handle
 			//
-			curve = inputCurveHandle.asNurbsCurve();
+			curve = inCurveHandle.asNurbsCurve();
 
 		}
 		else 
@@ -194,7 +171,7 @@ Only these values should be used when performing computations!
 		//
 		MVector forwardVector;
 
-		status = TwistSolver::transportVector(curve, upVector, forwardVector, samples);
+		status = TwistSolver::transportVector(curve, upVector, forwardVector);
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 
 		// Build transformation matrix from vectors
@@ -375,20 +352,22 @@ Creates a curve data object that smoothly passes through the supplied points and
 
 	MStatus status;
 
-	// Evaluate vector length
+	// Get aim length
 	//
-	double distance = startPoint.distanceTo(endPoint);
-	double halfDistance = distance / 2.0;
+	MVector aimVector = endPoint - startPoint;
+	double aimLength = aimVector.length();
 
-	bool isClose = TwistSolver::isClose(0.0, distance);
+	double distance = (aimLength > 1.0) ? aimLength : 1.0;
 
 	// Calculate mid points
 	//
 	MPoint p0 = startPoint;
-	MPoint p3 = isClose ? MPoint(startPoint + endVector.normal()) : endPoint;
+	MPoint p1 = startPoint + (startVector * (distance * 0.25));
 
-	MPoint p1 = (p0 + (startVector * halfDistance));
-	MPoint p2 = (p3 + (-endVector * halfDistance));
+	MPoint mid = startPoint + (startVector * (distance * 0.5));
+
+	MPoint p2 = mid + (endVector * (distance * 0.25));
+	MPoint p3 = mid + (endVector * (distance * 0.5));
 
 	MPointArray controlVertices(4);
 	controlVertices[0] = p0;
@@ -398,7 +377,7 @@ Creates a curve data object that smoothly passes through the supplied points and
 
 	// Define curve knots
 	//
-	double src[6] = {0, 0, 0, 1, 1, 1};
+	double src[6] = { 0, 0, 0, 1, 1, 1 };
 	MDoubleArray knots(src, 6);
 
 	// Create curve data to sample from
@@ -416,7 +395,7 @@ Creates a curve data object that smoothly passes through the supplied points and
 };
 
 
-MStatus TwistSolver::transportVector(const MObject& curve, MVector &transport, MVector &tangent, const int samples)
+MStatus TwistSolver::transportVector(const MObject& curve, MVector &transport, MVector &tangent)
 /**
 Transports a vector along a curve based on the number of parameter samples.
 
@@ -437,8 +416,12 @@ Transports a vector along a curve based on the number of parameter samples.
 
 	// Perform parallel frame transportation on up vector
 	//
+	unsigned int numCVs = fnCurve.numCVs(&status);
+	CHECK_MSTATUS_AND_RETURN_IT(status);
+
+	double samples = std::pow(static_cast<double>(numCVs), 2.0);
 	double length = fnCurve.length();
-	double step = (1.0 / static_cast<double>(samples));
+	double step = (1.0 / samples);
 
 	MVector cross1, cross2;
 	double distance, parameter;
@@ -745,48 +728,6 @@ Axis enumerator values can be supplied to designate the vectors.
 };
 
 
-MStatus TwistSolver::createRotationMatrix(const Axis forwardAxis, const MAngle angle, MMatrix &matrix)
-/**
-Creates a rotation matrix from the given forward axis and angle.
-
-@param forwardAxis: The forward axis to rotate from.
-@param angle: The angle of rotation.
-@param matrix: The passed matrix to populate.
-@return: Return status.
-*/
-{
-
-	double radian = angle.asRadians();
-
-	switch (forwardAxis)
-	{
-
-	case Axis::PosX: case Axis::NegX:
-
-		matrix = MEulerRotation(radian, 0.0, 0.0).asMatrix();
-		break;
-
-	case Axis::PosY: case Axis::NegY:
-
-		matrix = MEulerRotation(0.0, radian, 0.0).asMatrix();
-		break;
-
-	case Axis::PosZ: case Axis::NegZ:
-
-		matrix = MEulerRotation(0.0, 0.0, radian).asMatrix();
-		break;
-
-	default:
-
-		return MS::kFailure;
-
-	}
-
-	return MS::kSuccess;
-
-};
-
-
 MMatrix TwistSolver::composeMatrix(const MVector& x, const MVector& y, const MVector& z, const MPoint& pos)
 /**
 Composes a matrix from the axis vectors and position.
@@ -1050,8 +991,8 @@ The postConstructor will get called immediately after the constructor when it is
 	//
 	MObject node = this->thisMObject();
 
-	initializeCurveRamp(node, TwistSolver::falloff, 0, 0.0f, 0.0f, 1);
-	initializeCurveRamp(node, TwistSolver::falloff, 1, 1.0f, 1.0f, 1);
+	TwistSolver::initializeCurveRamp(node, TwistSolver::falloff, 0, 0.0f, 0.0f, 1);
+	TwistSolver::initializeCurveRamp(node, TwistSolver::falloff, 1, 1.0f, 1.0f, 1);
 
 };
 
@@ -1133,7 +1074,7 @@ Use this function to define any static attributes.
 	// Input attributes:
 	// ".operation" attribute
 	//
-	TwistSolver::operation = fnEnumAttr.create("operation", "operation", short(0), &status);
+	TwistSolver::operation = fnEnumAttr.create("operation", "op", short(0), &status);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
 	CHECK_MSTATUS(fnEnumAttr.addField("Shortest", 0));
@@ -1142,7 +1083,7 @@ Use this function to define any static attributes.
 
 	// ".forwardAxis" attribute
 	//
-	TwistSolver::forwardAxis = fnEnumAttr.create("forwardAxis", "forwardAxis", short(0), &status);
+	TwistSolver::forwardAxis = fnEnumAttr.create("forwardAxis", "fa", short(0), &status);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
 	CHECK_MSTATUS(fnEnumAttr.addField("PosX", 0));
@@ -1155,7 +1096,7 @@ Use this function to define any static attributes.
 
 	// ".upAxis" attribute
 	//
-	TwistSolver::upAxis = fnEnumAttr.create("upAxis", "upAxis", short(2), &status);
+	TwistSolver::upAxis = fnEnumAttr.create("upAxis", "ua", short(2), &status);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
 	CHECK_MSTATUS(fnEnumAttr.addField("PosX", 0));
@@ -1168,67 +1109,59 @@ Use this function to define any static attributes.
 
 	// ".startMatrix" attribute
 	//
-	TwistSolver::startMatrix = fnMatrixAttr.create("startMatrix", "startMatrix", MFnMatrixAttribute::kDouble, &status);
+	TwistSolver::startMatrix = fnMatrixAttr.create("startMatrix", "sm", MFnMatrixAttribute::kDouble, &status);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
 	CHECK_MSTATUS(fnMatrixAttr.addToCategory(TwistSolver::inputCategory));
 
-	// ".startOffsetAngle" attribute
+	// ".startOffsetMatrix" attribute
 	//
-	TwistSolver::startOffsetAngle = fnUnitAttr.create("startOffsetAngle", "startOffsetAngle", MFnUnitAttribute::kAngle, 0.0, &status);
+	TwistSolver::startOffsetMatrix = fnMatrixAttr.create("startOffsetMatrix", "som", MFnMatrixAttribute::kDouble, &status);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
-	CHECK_MSTATUS(fnUnitAttr.addToCategory(TwistSolver::inputCategory));
+	CHECK_MSTATUS(fnMatrixAttr.addToCategory(TwistSolver::inputCategory));
 
 	// ".endMatrix" attribute
 	//
-	TwistSolver::endMatrix = fnMatrixAttr.create("endMatrix", "endMatrix", MFnMatrixAttribute::kDouble, &status);
+	TwistSolver::endMatrix = fnMatrixAttr.create("endMatrix", "em", MFnMatrixAttribute::kDouble, &status);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
 	CHECK_MSTATUS(fnMatrixAttr.addToCategory(TwistSolver::inputCategory));
 
 	// ".endOffsetAngle" attribute
 	//
-	TwistSolver::endOffsetAngle = fnUnitAttr.create("endOffsetAngle", "endOffsetAngle", MFnUnitAttribute::kAngle, 0.0, &status);
+	TwistSolver::endOffsetMatrix = fnMatrixAttr.create("endOffsetMatrix", "eom", MFnMatrixAttribute::kDouble, &status);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
-	CHECK_MSTATUS(fnUnitAttr.addToCategory(TwistSolver::inputCategory));
+	CHECK_MSTATUS(fnMatrixAttr.addToCategory(TwistSolver::inputCategory));
 
-	// ".inputCurve" attribute
+	// ".inCurve" attribute
 	//
-	TwistSolver::inputCurve = fnTypedAttr.create("inputCurve", "inputCurve", MFnData::kNurbsCurve, MObject::kNullObj, &status);
+	TwistSolver::inCurve = fnTypedAttr.create("inCurve", "in", MFnData::kNurbsCurve, MObject::kNullObj, &status);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
 	CHECK_MSTATUS(fnTypedAttr.addToCategory(TwistSolver::inputCategory));
 
 	// ".segments" attribute
 	//
-	TwistSolver::segments = fnNumericAttr.create("segments", "segments", MFnNumericData::kInt, 1, &status);
+	TwistSolver::segments = fnNumericAttr.create("segments", "seg", MFnNumericData::kInt, 1, &status);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
 	CHECK_MSTATUS(fnNumericAttr.setMin(1));
 	CHECK_MSTATUS(fnNumericAttr.addToCategory(TwistSolver::inputCategory));
 
-	// ".samples" attribute
+	// ".inverse" attribute
 	//
-	TwistSolver::samples = fnNumericAttr.create("samples", "samples", MFnNumericData::kInt, 3, &status);
-	CHECK_MSTATUS_AND_RETURN_IT(status);
-
-	CHECK_MSTATUS(fnNumericAttr.setMin(3));
-	CHECK_MSTATUS(fnNumericAttr.addToCategory(TwistSolver::inputCategory));
-
-	// ".inverseTwist" attribute
-	//
-	TwistSolver::inverseTwist = fnEnumAttr.create("inverseTwist", "inverseTwist", 0, &status);
+	TwistSolver::inverse = fnEnumAttr.create("inverse", "inv", 0, &status);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
 	CHECK_MSTATUS(fnEnumAttr.addField("Off", 0));
 	CHECK_MSTATUS(fnEnumAttr.addField("On", 1));
 	CHECK_MSTATUS(fnEnumAttr.addToCategory(TwistSolver::inputCategory));
 
-	// ".reverseTwist" attribute
+	// ".reverse" attribute
 	//
-	TwistSolver::reverseTwist = fnEnumAttr.create("reverseTwist", "reverseTwist", 0, &status);
+	TwistSolver::reverse = fnEnumAttr.create("reverse", "rev", 0, &status);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
 	CHECK_MSTATUS(fnEnumAttr.addField("Off", 0));
@@ -1238,19 +1171,19 @@ Use this function to define any static attributes.
 	// ".falloff" attribute
 	// Any further initialization should be handled in the post constructor!
 	//
-	TwistSolver::falloff = fnRampAttr.createCurveRamp("falloff", "falloff", &status);
+	TwistSolver::falloff = fnRampAttr.createCurveRamp("falloff", "fo", &status);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
 	// ".falloffEnabled" attribute
 	//
-	TwistSolver::falloffEnabled = fnNumericAttr.create("falloffEnabled", "falloffEnabled", MFnNumericData::kBoolean, false, &status);
+	TwistSolver::falloffEnabled = fnNumericAttr.create("falloffEnabled", "foe", MFnNumericData::kBoolean, false, &status);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
 	CHECK_MSTATUS(fnNumericAttr.addToCategory(TwistSolver::inputCategory));
 
 	// ".restMatrix" tracking attribute
 	//
-	TwistSolver::restMatrix = fnMatrixAttr.create("restMatrix", "restMatrix", MFnMatrixAttribute::kDouble, &status);
+	TwistSolver::restMatrix = fnMatrixAttr.create("restMatrix", "rm", MFnMatrixAttribute::kDouble, &status);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
 	CHECK_MSTATUS(fnMatrixAttr.setHidden(true));
@@ -1258,7 +1191,7 @@ Use this function to define any static attributes.
 
 	// ".buffer" tracking attribute
 	//
-	TwistSolver::buffer = fnNumericAttr.create("buffer", "buffer", MFnNumericData::kDouble, 0.0, &status);
+	TwistSolver::buffer = fnNumericAttr.create("buffer", "b", MFnNumericData::kDouble, 0.0, &status);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
 	CHECK_MSTATUS(fnNumericAttr.setHidden(true));
@@ -1267,7 +1200,7 @@ Use this function to define any static attributes.
 	// Output attributes:
 	// ".twist" attribute
 	//
-	TwistSolver::twist = fnUnitAttr.create("twist", "twist", MFnUnitAttribute::kAngle, 0.0, &status);
+	TwistSolver::twist = fnUnitAttr.create("twist", "t", MFnUnitAttribute::kAngle, 0.0, &status);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
 	CHECK_MSTATUS(fnUnitAttr.setWritable(false));
@@ -1278,7 +1211,7 @@ Use this function to define any static attributes.
 
 	// ".roll" attribute
 	//
-	TwistSolver::roll = fnUnitAttr.create("roll", "roll", MFnUnitAttribute::kAngle, 0.0, &status);
+	TwistSolver::roll = fnUnitAttr.create("roll", "r", MFnUnitAttribute::kAngle, 0.0, &status);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
 	CHECK_MSTATUS(fnUnitAttr.setWritable(false));
@@ -1287,7 +1220,7 @@ Use this function to define any static attributes.
 
 	// ".local" attribute
 	//
-	TwistSolver::local = fnTypedAttr.create("local", "local", MFnData::kNurbsCurve, MObject::kNullObj, &status);
+	TwistSolver::local = fnTypedAttr.create("local", "l", MFnData::kNurbsCurve, MObject::kNullObj, &status);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
 	CHECK_MSTATUS(fnTypedAttr.setWritable(false));
@@ -1300,14 +1233,13 @@ Use this function to define any static attributes.
 	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::forwardAxis));
 	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::upAxis));
 	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::startMatrix));
-	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::startOffsetAngle));
+	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::startOffsetMatrix));
 	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::endMatrix));
-	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::endOffsetAngle));
-	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::inputCurve));
+	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::endOffsetMatrix));
+	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::inCurve));
 	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::segments));
-	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::samples));
-	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::inverseTwist));
-	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::reverseTwist));
+	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::inverse));
+	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::reverse));
 	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::falloff));
 	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::falloffEnabled));
 	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::restMatrix)); // DO NOT INCLUDE IN ATTRIBUTE AFFECTS
@@ -1319,35 +1251,26 @@ Use this function to define any static attributes.
 
 	// Define attribute relationships
 	//
-	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::operation, TwistSolver::twist));
-	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::forwardAxis, TwistSolver::twist));
-	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::upAxis, TwistSolver::twist));
-	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::startMatrix, TwistSolver::twist));
-	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::startOffsetAngle, TwistSolver::twist));
-	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::endMatrix, TwistSolver::twist));
-	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::endOffsetAngle, TwistSolver::twist));
-	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::inputCurve, TwistSolver::twist));
-	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::segments, TwistSolver::twist));
-	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::samples, TwistSolver::twist));
-	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::inverseTwist, TwistSolver::twist));
-	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::reverseTwist, TwistSolver::twist));
-	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::falloff, TwistSolver::twist));
-	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::falloffEnabled, TwistSolver::twist));
+	MObject attributes[2] = { TwistSolver::twist, TwistSolver::roll };
 
-	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::operation, TwistSolver::roll));
-	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::forwardAxis, TwistSolver::roll));
-	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::upAxis, TwistSolver::roll));
-	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::startMatrix, TwistSolver::roll));
-	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::startOffsetAngle, TwistSolver::roll));
-	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::endMatrix, TwistSolver::roll));
-	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::endOffsetAngle, TwistSolver::roll));
-	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::inputCurve, TwistSolver::roll));
-	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::segments, TwistSolver::roll));
-	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::samples, TwistSolver::roll));
-	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::inverseTwist, TwistSolver::roll));
-	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::reverseTwist, TwistSolver::roll));
-	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::falloff, TwistSolver::roll));
-	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::falloffEnabled, TwistSolver::roll));
+	for (MObject attribute : attributes)
+	{
+
+		CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::operation, attribute));
+		CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::forwardAxis, attribute));
+		CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::upAxis, attribute));
+		CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::startMatrix, attribute));
+		CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::startOffsetMatrix, attribute));
+		CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::endMatrix, attribute));
+		CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::endOffsetMatrix, attribute));
+		CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::inCurve, attribute));
+		CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::segments, attribute));
+		CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::inverse, attribute));
+		CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::reverse, attribute));
+		CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::falloff, attribute));
+		CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::falloffEnabled, attribute));
+
+	}
 
 	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::startMatrix, TwistSolver::local));
 	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::endMatrix, TwistSolver::local));
