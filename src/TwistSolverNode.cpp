@@ -8,9 +8,10 @@
 
 #include "TwistSolverNode.h"
 
-MObject TwistSolver::operation;
 MObject TwistSolver::forwardAxis;
+MObject TwistSolver::forwardAxisFlip;
 MObject TwistSolver::upAxis;
+MObject TwistSolver::upAxisFlip;
 MObject TwistSolver::startMatrix;
 MObject TwistSolver::startOffsetMatrix;
 MObject TwistSolver::endMatrix;
@@ -21,18 +22,15 @@ MObject	TwistSolver::inverse;
 MObject	TwistSolver::reverse;
 MObject TwistSolver::falloff;
 MObject TwistSolver::falloffEnabled;
-MObject TwistSolver::restMatrix;
-MObject TwistSolver::buffer;
 
 MObject TwistSolver::twist;
 MObject TwistSolver::roll;
-MObject	TwistSolver::local;
-
-MTypeId TwistSolver::id(0x0013b1c1);
+MObject	TwistSolver::debug;
 
 MString TwistSolver::inputCategory("Input");
-MString TwistSolver::simulationCategory("Simulation");
 MString TwistSolver::outputCategory("Output");
+
+MTypeId TwistSolver::id(0x0013b1c1);
 
 
 TwistSolver::TwistSolver() {}
@@ -73,7 +71,13 @@ Only these values should be used when performing computations!
 		MDataHandle forwardAxisHandle = data.inputValue(TwistSolver::forwardAxis, &status);
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 
+		MDataHandle forwardAxisFlipHandle = data.inputValue(TwistSolver::forwardAxisFlip, &status);
+		CHECK_MSTATUS_AND_RETURN_IT(status);
+
 		MDataHandle upAxisHandle = data.inputValue(TwistSolver::upAxis, &status);
+		CHECK_MSTATUS_AND_RETURN_IT(status);
+
+		MDataHandle upAxisFlipHandle = data.inputValue(TwistSolver::upAxisFlip, &status);
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 
 		MDataHandle startMatrixHandle = data.inputValue(TwistSolver::startMatrix, &status);
@@ -86,9 +90,6 @@ Only these values should be used when performing computations!
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 
 		MDataHandle endOffsetMatrixHandle = data.inputValue(TwistSolver::endOffsetMatrix, &status);
-		CHECK_MSTATUS_AND_RETURN_IT(status);
-
-		MDataHandle operationHandle = data.inputValue(TwistSolver::operation, &status);
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 
 		MDataHandle inCurveHandle = data.inputValue(TwistSolver::inCurve, &status);
@@ -106,17 +107,12 @@ Only these values should be used when performing computations!
 		MDataHandle falloffEnabledHandle = data.inputValue(TwistSolver::falloffEnabled, &status);
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 
-		MDataHandle restMatrixHandle = data.inputValue(TwistSolver::restMatrix, &status); // Used for caching purposes
-		CHECK_MSTATUS_AND_RETURN_IT(status);
-
-		MDataHandle bufferHandle = data.inputValue(TwistSolver::buffer, &status); // Used for caching purposes
-		CHECK_MSTATUS_AND_RETURN_IT(status);
-
 		// Get data values
 		//
 		Axis forwardAxis = Axis(forwardAxisHandle.asShort());
+		bool forwardAxisFlip = forwardAxisFlipHandle.asBool();
 		Axis upAxis = Axis(upAxisHandle.asShort());
-		Operation operation = Operation(operationHandle.asShort());
+		bool upAxisFlip = upAxisFlipHandle.asBool();
 		short segments = segmentsHandle.asShort();
 		bool inverse = inverseHandle.asBool();
 		bool reverse = reverseHandle.asBool();
@@ -127,149 +123,44 @@ Only these values should be used when performing computations!
 		MMatrix endOffsetMatrix = endOffsetMatrixHandle.asMatrix();
 		MMatrix endMatrix = endOffsetMatrix * endMatrixHandle.asMatrix();
 
-		MMatrix restMatrix = restMatrixHandle.asMatrix();
-		double buffer = bufferHandle.asDouble();
-
-		// Extract twist vectors
+		// Check if curve is valid
 		//
-		MVector startVector = TwistSolver::getAxisVector(forwardAxis, startMatrix, true);
-		MVector endVector = TwistSolver::getAxisVector(forwardAxis, endMatrix, true);
-		MVector upVector = TwistSolver::getAxisVector(upAxis, startMatrix, true);
+		MObject curve = inCurveHandle.asNurbsCurve();
+		bool hasCurve = !curve.isNull();
 
-		MPoint startPoint = MPoint(startMatrix[3]);
-		MPoint endPoint = MPoint(endMatrix[3]);
-
-		// Check if ".inCurve" has a connection
-		//
-		MObject node = this->thisMObject();
-		MPlug inCurvePlug(node, TwistSolver::inCurve);
-
-		bool isConnected = inCurvePlug.isConnected(&status);
-		CHECK_MSTATUS_AND_RETURN_IT(status);
-
-		MObject curve;
-
-		if (isConnected) 
+		if (!hasCurve)
 		{
 
-			// Get curve data from data handle
+			// Build curve data from start/end matrices
 			//
-			curve = inCurveHandle.asNurbsCurve();
+			MVector startVector = TwistSolver::getAxisVector(startMatrix, forwardAxis, forwardAxisFlip, true);
+			MVector endVector = TwistSolver::getAxisVector(endMatrix, forwardAxis, forwardAxisFlip, true);
 
-		}
-		else 
-		{
+			MPoint startPoint = MPoint(startMatrix[3]);
+			MPoint endPoint = MPoint(endMatrix[3]);
 
-			// Build curve data
-			//
-			status = TwistSolver::createCurveData(startPoint, startVector, endPoint, endVector, curve);
+			status = TwistSolver::createCurveData(startPoint, startVector, endPoint, endVector, curve); 
 			CHECK_MSTATUS_AND_RETURN_IT(status);
 
 		}
 
-		// Transport up vector along curve
+		// Transport start matrix along curve
 		//
-		MVector forwardVector;
-
-		status = TwistSolver::transportVector(curve, upVector, forwardVector);
+		MMatrix transportMatrix = TwistSolver::transportMatrix(curve, upAxis, upAxisFlip, startMatrix, &status);
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 
-		// Build transformation matrix from vectors
-		//
-		MMatrix transportMatrix;
-			
-		status = TwistSolver::composeMatrix(forwardAxis, forwardVector, upAxis, upVector, endPoint, transportMatrix);
-		CHECK_MSTATUS_AND_RETURN_IT(status);
+		// Evaluate twist angle
+		// 
+		MVector initialUpVector = TwistSolver::getAxisVector(transportMatrix, upAxis, upAxisFlip, true);
+		MVector forwardVector = TwistSolver::getAxisVector(endMatrix, forwardAxis, forwardAxisFlip, true);
 
-		// Check which operation to perform
-		//
-		double roll = 0.0;
-		double negateIt = (inverse) ? -1.0 : 1.0;
+		MVector startUpVector = TwistSolver::getAxisVector(endMatrix, upAxis, upAxisFlip, true);
+		MVector endUpVector = TwistSolver::projectVector(MPoint::origin, forwardVector, initialUpVector).normal();
+		
+		double sign = ((endUpVector ^ startUpVector).normal() * forwardVector > 0.0) ? 1.0 : -1.0;
+		double angle = startUpVector.angle(endUpVector) * sign;
 
-		switch (operation) 
-		{
-
-		case Operation::Shortest:
-			{
-
-				// Put end matrix in transport matrix space
-				// Remember we're trying to calculate the rotational difference between the transported start matrix!
-				//
-				MMatrix matrix = endMatrix * transportMatrix.inverse();
-
-				// Initialize transformation matrix
-				//
-				MTransformationMatrix transform(matrix);
-
-				MEulerRotation eulerRotation = transform.eulerRotation();
-				roll = radToDeg(eulerRotation.x) * negateIt;
-
-			}
-			break;
-
-		case Operation::NoFlip:
-			{
-				
-				// Check if maya is playing
-				//
-				bool isPlaying = MAnimControl::isPlaying();
-
-				if (isPlaying) 
-				{
-
-					// Multiply twist matrix by previous computed rest matrix
-					//
-					MMatrix matrix = endMatrix * transportMatrix.inverse();
-					MMatrix temp = transportMatrix * restMatrix.inverse();
-
-					// Initialize transformation matrix
-					//
-					MTransformationMatrix transform(temp);
-
-					MEulerRotation eulerRot = transform.eulerRotation();
-					roll = radToDeg(eulerRot.x) * negateIt;
-
-					roll += buffer;
-
-					// Store twist values
-					//
-					restMatrixHandle.setMMatrix(transportMatrix);
-					restMatrixHandle.setClean();
-
-					bufferHandle.setDouble(roll);
-					bufferHandle.setClean();
-
-				}
-				else 
-				{
-
-					// Put end matrix in transport matrix space
-					//
-					MMatrix matrix = endMatrix * transportMatrix.inverse();
-
-					// Initialize transformation matrix
-					//
-					MTransformationMatrix transform(transportMatrix);
-
-					MEulerRotation eulerRot = transform.eulerRotation();
-					roll = radToDeg(eulerRot.x) * negateIt;
-
-					// Store twist values
-					//
-					restMatrixHandle.setMMatrix(transportMatrix);
-					restMatrixHandle.setClean();
-
-					bufferHandle.setDouble(roll);
-					bufferHandle.setClean();
-
-				}
-
-			}
-			break;
-
-		}
-
-		// Build output array values
+		// Build output array
 		//
 		MArrayDataHandle twistHandle = data.outputArrayValue(TwistSolver::twist, &status);
 		CHECK_MSTATUS_AND_RETURN_IT(status);
@@ -277,24 +168,21 @@ Only these values should be used when performing computations!
 		MArrayDataBuilder builder(&data, TwistSolver::twist, segments, &status);
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 
+		double roll = (inverse) ? -angle : angle;
 		MDoubleArray twists = this->distributeRoll(roll, segments, reverse);
 
 		MDataHandle element;
-		MAngle angle;
+		MAngle twist;
 
 		for (int i = 0; i < segments; i++) 
 		{
 
-			// Create data handle
-			//
+			twist = MAngle(twists[i], MAngle::kRadians);
+
 			element = builder.addElement(i, &status);
 			CHECK_MSTATUS_AND_RETURN_IT(status);
 
-			// Initialize MAngle from double
-			//
-			angle = MAngle(twists[i], MAngle::kDegrees);
-
-			element.setMAngle(angle);
+			element.setMAngle(twist);
 			element.setClean();
 
 		}
@@ -305,19 +193,19 @@ Only these values should be used when performing computations!
 		status = twistHandle.setAllClean();
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 
-		// Get output data handle and assign value
+		// Update data handle with array builder
 		//
 		MDataHandle rollHandle = data.outputValue(TwistSolver::roll, &status);
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 
-		rollHandle.setMAngle(MAngle(roll, MAngle::kDegrees));
+		rollHandle.setMAngle(MAngle(roll, MAngle::kRadians));
 		rollHandle.setClean();
 
-		MDataHandle localHandle = data.outputValue(TwistSolver::local, &status);
+		MDataHandle debugHandle = data.outputValue(TwistSolver::debug, &status);
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 
-		localHandle.setMObject(curve);
-		localHandle.setClean();
+		debugHandle.setMObject(curve);
+		debugHandle.setClean();
 
 		// Mark plug as clean
 		//
@@ -387,7 +275,7 @@ Creates a curve data object that smoothly passes through the supplied points and
 
 	MFnNurbsCurve fnCurve;
 
-	fnCurve.create(controlVertices, knots, 3, MFnNurbsCurve::kOpen, false, true, curveData, &status);
+	MObject curveGeom = fnCurve.create(controlVertices, knots, 3, MFnNurbsCurve::kOpen, false, true, curveData, &status);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
 	return MS::kSuccess;
@@ -395,7 +283,7 @@ Creates a curve data object that smoothly passes through the supplied points and
 };
 
 
-MStatus TwistSolver::transportVector(const MObject& curve, MVector &transport, MVector &tangent)
+MMatrix TwistSolver::transportMatrix(const MObject& curve, const Axis upAxis, const bool upAxisFlip, const MMatrix &matrix, MStatus* status)
 /**
 Transports a vector along a curve based on the number of parameter samples.
 
@@ -407,40 +295,44 @@ Transports a vector along a curve based on the number of parameter samples.
 */
 {
 
-	MStatus status;
-
-	// Initialize function set
+	// Calculate number of required samples
 	//
-	MFnNurbsCurve fnCurve(curve, &status);
-	CHECK_MSTATUS_AND_RETURN_IT(status);
+	MFnNurbsCurve fnCurve(curve, status);
+	CHECK_MSTATUS_AND_RETURN(*status, MMatrix::identity);
 
-	// Perform parallel frame transportation on up vector
+	unsigned int numCVs = fnCurve.numCVs(status);
+	CHECK_MSTATUS_AND_RETURN(*status, MMatrix::identity);
+
+	unsigned int samples = std::pow(numCVs, 2);
+
+	// Transport matrix across sample range
 	//
-	unsigned int numCVs = fnCurve.numCVs(&status);
-	CHECK_MSTATUS_AND_RETURN_IT(status);
+	MMatrix transportMatrix = MMatrix(matrix);
+	MVector upVector = TwistSolver::getAxisVector(matrix, upAxis, upAxisFlip, true);
 
-	double samples = std::pow(static_cast<double>(numCVs), 2.0);
 	double length = fnCurve.length();
-	double step = (1.0 / samples);
+	double step = static_cast<double>(1.0 / samples);
 
-	MVector cross1, cross2;
+	MMatrix startMatrix, endMatrix;
+	MPoint position;
+	MVector forwardVector, rightVector;
 	double distance, parameter;
 
 	for (int i = 0; i < samples; i++)
 	{
 
-		// Get u-parameter
-		// Remember to compensate for the end caps or else the tangent will zero out!
+		// Find parameter from distance
+		// Don't forget to round off distances or else the tangents will zero out!
 		//
-		distance = ((step * static_cast<double>(i)) * length);
+		distance = (step * static_cast<double>(i)) * length;
 
-		if (distance == 0.0)
+		if (distance <= 0.0)
 		{
 
 			distance += 1e-3;
 
 		}
-		else if (distance == length)
+		else if (distance >= length)
 		{
 
 			distance -= 1e-3;
@@ -448,27 +340,62 @@ Transports a vector along a curve based on the number of parameter samples.
 		}
 		else;
 
-		parameter = fnCurve.findParamFromLength(distance);
+		parameter = fnCurve.findParamFromLength(distance, status);
+		CHECK_MSTATUS_AND_RETURN(*status, MMatrix::identity);
 
-		// Get tangent and flip if specified
+		// Get next tangent and transport vector
 		//
-		tangent = fnCurve.tangent(parameter, MSpace::kTransform).normal();
+		forwardVector = fnCurve.tangent(parameter, MSpace::kWorld, status).normal();
+		CHECK_MSTATUS_AND_RETURN(*status, MMatrix::identity);
 
-		// Perform cross product
+		rightVector = (forwardVector ^ upVector).normal();
+		upVector = (rightVector ^ forwardVector).normal();
+
+		// Multiply start matrix into curve space for first iteration
 		//
-		cross1 = transport ^ tangent;
-		cross2 = tangent ^ cross1;
+		if (i == 0)
+		{
 
-		transport = cross2.normal();
+			*status = fnCurve.getPointAtParam(parameter, position, MSpace::kWorld);
+			CHECK_MSTATUS_AND_RETURN(*status, MMatrix::identity);
+
+			startMatrix = TwistSolver::composeMatrix(forwardVector, upVector, rightVector, position);
+			transportMatrix *= startMatrix.inverse();
+
+		}
 
 	}
 
-	return MS::kSuccess;
+	// Multiply start matrix out of curve space
+	//
+	endMatrix = TwistSolver::composeMatrix(forwardVector, upVector, rightVector, position);
+	transportMatrix *= endMatrix;
+
+	return transportMatrix;
 
 };
 
 
-MStatus TwistSolver::composeMatrix(const Axis forwardAxis, const MVector& forwardVector, const Axis upAxis, const MVector& upVector, const MPoint& pos, MMatrix& matrix)
+MVector TwistSolver::projectVector(const MPoint& origin, const MVector& normal, const MVector& vector)
+/**
+Projects the supplied vector onto the specified normal.
+
+@param origin: The position of the normal.
+@param normal: The vector direction of the normal.
+@param vector: The vector to project.
+@return: The projected vector.
+*/
+{
+
+	MVector unit = normal.normal();
+	double dot = unit * vector;
+	
+	return origin + (vector - (unit * dot));
+
+};
+
+
+MStatus TwistSolver::composeMatrix(const Axis forwardAxis, const MVector& forwardVector, const Axis upAxis, const MVector& upVector, const MPoint& position, MMatrix& matrix)
 /**
 Composes a matrix the given forward/up vector and position.
 Axis enumerator values can be supplied to designate the vectors.
@@ -487,222 +414,123 @@ Axis enumerator values can be supplied to designate the vectors.
 
 	// Declare axis vectors
 	//
-	MVector x, y, z;
+	MVector xAxis, yAxis, zAxis;
 
 	switch (forwardAxis) 
 	{
 
-	case Axis::PosX:
-	{
+		case Axis::X:
+		{
 
-		// Assign forward vector
-		//
-		x = forwardVector;
+			// Assign forward vector
+			//
+			xAxis = forwardVector;
 
-		// Calculate remaining axises
-		//
-		if (upAxis == Axis::PosX || upAxis == Axis::NegX) 
+			// Calculate remaining axises
+			//
+			if (upAxis == Axis::X) 
+			{
+
+				return MS::kFailure;
+
+			}
+			else if (upAxis == Axis::Y) 
+			{
+
+				zAxis = (xAxis ^ upVector).normal();
+				yAxis = (zAxis ^ xAxis).normal();
+
+			}
+			else if (upAxis == Axis::Z) 
+			{
+
+				yAxis = (upVector ^ xAxis).normal();
+				zAxis = (xAxis ^ yAxis).normal();
+
+			}
+
+		}
+		break;
+
+		case Axis::Y:
+		{
+
+			// Assign forward vector
+			//
+			yAxis = forwardVector;
+
+			// Calculate remaining axises
+			//
+			if (upAxis == Axis::X)
+			{
+
+				zAxis = (upVector ^ yAxis).normal();
+				xAxis = (yAxis ^ zAxis).normal();
+
+			}
+			else if (upAxis == Axis::Y)
+			{
+
+				return MS::kFailure;
+
+			}
+			else if (upAxis == Axis::Z)
+			{
+
+				xAxis = (yAxis ^ upVector).normal();
+				zAxis = (xAxis ^ yAxis).normal();
+
+			}
+
+		}
+		break;
+
+		case Axis::Z:
+		{
+
+			// Assign forward vector
+			//
+			zAxis = forwardVector;
+
+			// Calculate remaining axises
+			//
+			if (upAxis == Axis::X) 
+			{
+
+				yAxis = (zAxis ^ upVector).normal();
+				xAxis = (yAxis ^ zAxis).normal();
+
+			}
+			else if (upAxis == Axis::Y)
+			{
+
+				xAxis = (upVector ^ zAxis).normal();
+				yAxis = (zAxis ^ xAxis).normal();
+
+			}
+			else if (upAxis == Axis::Z)
+			{
+
+				return MS::kFailure;
+
+			}
+
+		}
+		break;
+
+		default:
 		{
 
 			return MS::kFailure;
 
 		}
-		else if (upAxis == Axis::PosY || upAxis == Axis::NegY) 
-		{
-
-			z = (x ^ upVector).normal();
-			y = (z ^ x).normal();
-
-		}
-		else if (upAxis == Axis::PosZ || upAxis == Axis::NegZ) 
-		{
-
-			y = (upVector ^ x).normal();
-			z = (x ^ y).normal();
-
-		}
-
-	}
-	break;
-
-	case Axis::NegX:
-	{
-
-		// Assign forward vector
-		//
-		x = forwardVector;
-
-		// Calculate remaining axises
-		//
-		if (upAxis == Axis::PosX || upAxis == Axis::NegX)
-		{
-
-			return MS::kFailure;
-
-		}
-		else if (upAxis == Axis::PosY || upAxis == Axis::NegY)
-		{
-
-			z = (x ^ upVector).normal();
-			y = (z ^ x).normal();
-
-		}
-		else if (upAxis == Axis::PosZ || upAxis == Axis::NegZ)
-		{
-
-			y = (upVector ^ x).normal();
-			z = (x ^ y).normal();
-
-		}
-
-	}
-	break;
-
-	case Axis::PosY:
-	{
-
-		// Assign forward vector
-		//
-		y = forwardVector;
-
-		// Calculate remaining axises
-		//
-		if (upAxis == Axis::PosX || upAxis == Axis::NegX)
-		{
-
-			z = (upVector ^ y).normal();
-			x = (y ^ z).normal();
-
-		}
-		else if (upAxis == Axis::PosY || upAxis == Axis::NegY)
-		{
-
-			return MS::kFailure;
-
-		}
-		else if (upAxis == Axis::PosZ || upAxis == Axis::NegZ)
-		{
-
-			x = (y ^ upVector).normal();
-			z = (x ^ y).normal();
-
-		}
-
-	}
-	break;
-
-	case Axis::NegY:
-	{
-
-		// Assign forward vector
-		//
-		y = forwardVector;
-
-		// Calculate remaining axises
-		//
-		if (upAxis == Axis::PosX || upAxis == Axis::NegX)
-		{
-
-			z = (upVector ^ y).normal();
-			x = (y ^ z).normal();
-
-		}
-		else if (upAxis == Axis::PosY || upAxis == Axis::NegY)
-		{
-
-			return MS::kFailure;
-
-		}
-		else if (upAxis == Axis::PosZ || upAxis == Axis::NegZ)
-		{
-
-			x = (y ^ upVector).normal();
-			z = (x ^ y).normal();
-
-		}
-
-	}
-	break;
-
-	case Axis::PosZ:
-	{
-
-		// Assign forward vector
-		//
-		z = forwardVector;
-
-		// Calculate remaining axises
-		//
-		if (upAxis == Axis::PosX || upAxis == Axis::NegX) 
-		{
-
-			y = (z ^ upVector).normal();
-			x = (y ^ z).normal();
-
-		}
-		else if (upAxis == Axis::PosY || upAxis == Axis::NegY)
-		{
-
-			x = (upVector ^ z).normal();
-			y = (z ^ x).normal();
-
-		}
-		else if (upAxis == Axis::PosZ || upAxis == Axis::NegZ)
-		{
-
-			return MS::kFailure;
-
-		}
-
-	}
-	break;
-
-	case Axis::NegZ:
-	{
-
-		// Assign forward vector
-		//
-		z = forwardVector;
-
-		// Calculate remaining axises
-		//
-		if (upAxis == Axis::PosX || upAxis == Axis::NegX)
-		{
-
-			y = (z ^ upVector).normal();
-			x = (y ^ z).normal();
-
-		}
-		else if (upAxis == Axis::PosY || upAxis == Axis::NegY)
-		{
-
-			x = (upVector ^ z).normal();
-			y = (z ^ x).normal();
-
-		}
-		else if (upAxis == Axis::PosZ || upAxis == Axis::NegZ)
-		{
-
-			return MS::kFailure;
-
-		}
-
-	}
-	break;
-
-	default:
-	{
-
-		return MS::kFailure;
-
-	}
-	break;
+		break;
 
 	}
 
-	// Return matrix from axis vectors
+	// Return matrixAxis from axis vectors
 	//
-	matrix = TwistSolver::composeMatrix(x, y, z, pos);
+	matrix = TwistSolver::composeMatrix(xAxis, yAxis, zAxis, position);
 
 	return MS::kSuccess;
 
@@ -819,57 +647,56 @@ Breaks down the supplied roll value into individual twist values.
 };
 
 
-MVector	TwistSolver::getAxisVector(const Axis axis, const MMatrix& matrix, const bool normalize)
+MVector	TwistSolver::getAxisVector(const MMatrix& matrix, const Axis axis, const bool flip, const bool normalize)
 /**
 Returns the axis vector from the supplied matrix
 
-@param axis: The field value to query.
-@param matrix: The matrix to query.
-@param normalize: Normalizes the returned axis vector.
+@param matrix: The transform matrix to sample from.
+@param axis: The axis vector to return.
+@param flip: Flips the requested axis vector.
+@param normalize: Normalizes the requested axis vector.
 @return: MVector
 */
 {
 
 	// Get vector
 	//
-	MVector axisVector;
+	double sign = flip ? -1.0 : 1.0;
+	MVector axisVector = MVector::zero;
 
 	switch (axis)
 	{
 
-	case Axis::PosX:
+		case Axis::X:
+		{
 
-		axisVector = MVector(matrix[0]);
+			axisVector = MVector(matrix(0, 0), matrix(0, 1), matrix(0, 2)) * sign;
+
+		}
 		break;
 
-	case Axis::NegX:
+		case Axis::Y:
+		{
 
-		axisVector = -MVector(matrix[0]);
+			axisVector = MVector(matrix(1, 0), matrix(1, 1), matrix(1, 2)) * sign;
+
+		}
 		break;
 
-	case Axis::PosY:
+		case Axis::Z:
+		{
 
-		axisVector = MVector(matrix[1]);
+			axisVector = MVector(matrix(2, 0), matrix(2, 1), matrix(2, 2)) * sign;
+
+		}
 		break;
 
-	case Axis::NegY:
+		default:
+		{
 
-		axisVector = -MVector(matrix[1]);
-		break;
+			axisVector = MVector::zero;
 
-	case Axis::PosZ:
-
-		axisVector = MVector(matrix[2]);
-		break;
-
-	case Axis::NegZ:
-
-		axisVector = -MVector(matrix[2]);
-		break;
-
-	default:
-
-		axisVector = MVector::zero;
+		}
 		break;
 
 	}
@@ -888,16 +715,17 @@ Returns the axis vector from the supplied matrix
 };
 
 
-MVector TwistSolver::getAxisVector(const Axis axis)
+MVector TwistSolver::getAxisVector(const Axis axis, const bool flip)
 /**
 Returns the axis vector for given enum field value.
 
-@param axis: The field value to query.
+@param axis: The axis vector to return.
+@param flip: Flips the requested axis vector.
 @return: MVector
 */
 {
 
-	return TwistSolver::getAxisVector(axis, MMatrix::identity, false);
+	return TwistSolver::getAxisVector(MMatrix::identity, axis, flip, false);
 
 };
 
@@ -1072,40 +900,39 @@ Use this function to define any static attributes.
 	MRampAttribute fnRampAttr;
 
 	// Input attributes:
-	// ".operation" attribute
-	//
-	TwistSolver::operation = fnEnumAttr.create("operation", "op", short(0), &status);
-	CHECK_MSTATUS_AND_RETURN_IT(status);
-
-	CHECK_MSTATUS(fnEnumAttr.addField("Shortest", 0));
-	CHECK_MSTATUS(fnEnumAttr.addField("No Flip", 1));
-	CHECK_MSTATUS(fnEnumAttr.addToCategory(TwistSolver::inputCategory));
-
 	// ".forwardAxis" attribute
 	//
 	TwistSolver::forwardAxis = fnEnumAttr.create("forwardAxis", "fa", short(0), &status);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
-	CHECK_MSTATUS(fnEnumAttr.addField("PosX", 0));
-	CHECK_MSTATUS(fnEnumAttr.addField("NegX", 1));
-	CHECK_MSTATUS(fnEnumAttr.addField("PosY", 2));
-	CHECK_MSTATUS(fnEnumAttr.addField("NegY", 3));
-	CHECK_MSTATUS(fnEnumAttr.addField("PosZ", 4));
-	CHECK_MSTATUS(fnEnumAttr.addField("NegZ", 5));
+	CHECK_MSTATUS(fnEnumAttr.addField("X", 0));
+	CHECK_MSTATUS(fnEnumAttr.addField("Y", 1));
+	CHECK_MSTATUS(fnEnumAttr.addField("Z", 2));
 	CHECK_MSTATUS(fnEnumAttr.addToCategory(TwistSolver::inputCategory));
+
+	// ".forwardAxisFlip" attribute
+	//
+	TwistSolver::forwardAxisFlip = fnNumericAttr.create("forwardAxisFlip", "faf", MFnNumericData::kBoolean, false, &status);
+	CHECK_MSTATUS_AND_RETURN_IT(status);
+
+	CHECK_MSTATUS(fnNumericAttr.addToCategory(TwistSolver::inputCategory));
 
 	// ".upAxis" attribute
 	//
-	TwistSolver::upAxis = fnEnumAttr.create("upAxis", "ua", short(2), &status);
+	TwistSolver::upAxis = fnEnumAttr.create("upAxis", "ua", short(1), &status);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
-	CHECK_MSTATUS(fnEnumAttr.addField("PosX", 0));
-	CHECK_MSTATUS(fnEnumAttr.addField("NegX", 1));
-	CHECK_MSTATUS(fnEnumAttr.addField("PosY", 2));
-	CHECK_MSTATUS(fnEnumAttr.addField("NegY", 3));
-	CHECK_MSTATUS(fnEnumAttr.addField("PosZ", 4));
-	CHECK_MSTATUS(fnEnumAttr.addField("NegZ", 5));
+	CHECK_MSTATUS(fnEnumAttr.addField("X", 0));
+	CHECK_MSTATUS(fnEnumAttr.addField("Y", 1));
+	CHECK_MSTATUS(fnEnumAttr.addField("Z", 2));
 	CHECK_MSTATUS(fnEnumAttr.addToCategory(TwistSolver::inputCategory));
+
+	// ".upAxisFlip" attribute
+	//
+	TwistSolver::upAxisFlip = fnNumericAttr.create("upAxisFlip", "uaf", MFnNumericData::kBoolean, false, &status);
+	CHECK_MSTATUS_AND_RETURN_IT(status);
+
+	CHECK_MSTATUS(fnNumericAttr.addToCategory(TwistSolver::inputCategory));
 
 	// ".startMatrix" attribute
 	//
@@ -1181,22 +1008,6 @@ Use this function to define any static attributes.
 
 	CHECK_MSTATUS(fnNumericAttr.addToCategory(TwistSolver::inputCategory));
 
-	// ".restMatrix" tracking attribute
-	//
-	TwistSolver::restMatrix = fnMatrixAttr.create("restMatrix", "rm", MFnMatrixAttribute::kDouble, &status);
-	CHECK_MSTATUS_AND_RETURN_IT(status);
-
-	CHECK_MSTATUS(fnMatrixAttr.setHidden(true));
-	CHECK_MSTATUS(fnMatrixAttr.addToCategory(TwistSolver::simulationCategory));
-
-	// ".buffer" tracking attribute
-	//
-	TwistSolver::buffer = fnNumericAttr.create("buffer", "b", MFnNumericData::kDouble, 0.0, &status);
-	CHECK_MSTATUS_AND_RETURN_IT(status);
-
-	CHECK_MSTATUS(fnNumericAttr.setHidden(true));
-	CHECK_MSTATUS(fnNumericAttr.addToCategory(TwistSolver::simulationCategory));
-
 	// Output attributes:
 	// ".twist" attribute
 	//
@@ -1220,7 +1031,7 @@ Use this function to define any static attributes.
 
 	// ".local" attribute
 	//
-	TwistSolver::local = fnTypedAttr.create("local", "l", MFnData::kNurbsCurve, MObject::kNullObj, &status);
+	TwistSolver::debug = fnTypedAttr.create("debug", "d", MFnData::kNurbsCurve, MObject::kNullObj, &status);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
 	CHECK_MSTATUS(fnTypedAttr.setWritable(false));
@@ -1229,9 +1040,10 @@ Use this function to define any static attributes.
 
 	// Add attributes
 	//
-	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::operation));
 	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::forwardAxis));
+	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::forwardAxisFlip));
 	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::upAxis));
+	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::upAxisFlip));
 	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::startMatrix));
 	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::startOffsetMatrix));
 	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::endMatrix));
@@ -1242,12 +1054,10 @@ Use this function to define any static attributes.
 	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::reverse));
 	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::falloff));
 	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::falloffEnabled));
-	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::restMatrix)); // DO NOT INCLUDE IN ATTRIBUTE AFFECTS
-	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::buffer)); // DO NOT INCLUDE IN ATTRIBUTE AFFECTS
 
 	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::twist));
 	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::roll));
-	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::local));
+	CHECK_MSTATUS(TwistSolver::addAttribute(TwistSolver::debug));
 
 	// Define attribute relationships
 	//
@@ -1256,7 +1066,6 @@ Use this function to define any static attributes.
 	for (MObject attribute : attributes)
 	{
 
-		CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::operation, attribute));
 		CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::forwardAxis, attribute));
 		CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::upAxis, attribute));
 		CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::startMatrix, attribute));
@@ -1272,8 +1081,8 @@ Use this function to define any static attributes.
 
 	}
 
-	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::startMatrix, TwistSolver::local));
-	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::endMatrix, TwistSolver::local));
+	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::startMatrix, TwistSolver::debug));
+	CHECK_MSTATUS(TwistSolver::attributeAffects(TwistSolver::endMatrix, TwistSolver::debug));
 
 	return status;
 

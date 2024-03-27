@@ -50,21 +50,9 @@
 enum class Axis
 {
 
-	PosX = 0,
-	NegX = 1,
-	PosY = 2,
-	NegY = 3,
-	PosZ = 4,
-	NegZ = 5
-
-};
-
-
-enum class Operation
-{
-
-	Shortest = 0,
-	NoFlip = 1
+	X = 0,
+	Y = 1,
+	Z = 2
 
 };
 
@@ -85,15 +73,16 @@ public:
 	static  MStatus			initialize();
 	virtual MStatus			initializeCurveRamp(MObject& node, MObject& attribute, const int index, const float position, const float value, const int interpolation);
 
-	static	MVector			getAxisVector(const Axis axis, const MMatrix& matrix, const bool normalize);
-	static	MVector			getAxisVector(const Axis axis);
+	static	MVector			getAxisVector(const MMatrix& matrix, const Axis axis, const bool flip, const bool normalize);
+	static	MVector			getAxisVector(const Axis axis, const bool flip);
 
 	static	MStatus			composeMatrix(const Axis forwardAxis, const MVector& forwardVector, const Axis upAxis, const MVector& upVector, const MPoint& pos, MMatrix& matrix);
 	static	MStatus			composeMatrix(const Axis forwardAxis, const MVector& forwardVector, const Axis upAxis, const MVector& upVector, MMatrix& matrix);
-	static	MMatrix			composeMatrix(const MVector& x, const MVector& y, const MVector& z, const MPoint& pos);
+	static	MMatrix			composeMatrix(const MVector& xAxis, const MVector& yAxis, const MVector& zAxis, const MPoint& position);
 
 	static	MStatus			createCurveData(const MPoint& startPoint, const MVector& startVector, const MPoint& endPoint, const MVector& endVector, MObject &curveData);
-	static	MStatus			transportVector(const MObject& curve, MVector &transport, MVector &tangent);
+	static	MMatrix			transportMatrix(const MObject& curve, const Axis upAxis, const bool upAxisFlip, const MMatrix& matrix, MStatus* status);
+	static	MVector			projectVector(const MPoint& origin, const MVector& normal, const MVector& vector);
 	virtual	MDoubleArray	distributeRoll(const double roll, const unsigned int segments, const bool reverse);
 
 	static	double			degToRad(const double degrees);
@@ -104,9 +93,10 @@ public:
 
 public:
 
-	static	MObject			operation;
 	static  MObject			forwardAxis;
+	static  MObject			forwardAxisFlip;
 	static  MObject			upAxis;
+	static  MObject			upAxisFlip;
 	static  MObject			startMatrix;
 	static  MObject			startOffsetMatrix;
 	static  MObject			endMatrix;
@@ -117,15 +107,12 @@ public:
 	static	MObject			reverse;
 	static  MObject			falloff;
 	static  MObject			falloffEnabled;
-	static	MObject			restMatrix; // Internal tracker attributes
-	static	MObject			buffer; // Internal tracker attributes
 
 	static  MObject			twist;
 	static  MObject			roll;
-	static  MObject			local;
+	static  MObject			debug;
 
 	static	MString			inputCategory;
-	static	MString			simulationCategory;
 	static	MString			outputCategory;
 
 	static	MTypeId			id;
