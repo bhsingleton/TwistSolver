@@ -1,7 +1,7 @@
 //
 // File: pluginMain.cpp
 //
-// Author: Ben Singleton
+// Author: Benjamin H. Singleton
 //
 
 #include "TwistSolverNode.h"

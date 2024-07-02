@@ -1,9 +1,7 @@
 //
 // File: TwistSolverNode.cpp
 //
-// Dependency Graph Node: TwistSolver
-//
-// Author: Ben Singleton
+// Author: Benjamin H. Singleton
 //
 
 #include "TwistSolverNode.h"
@@ -221,6 +219,19 @@ Only these values should be used when performing computations!
 		return MS::kUnknownParameter;
 
 	}
+
+};
+
+
+MPxNode::SchedulingType TwistSolver::schedulingType() const
+/**
+When overridden this method controls the degree of parallelism supported by the node during threaded evaluation.
+
+@return: The scheduling type to be used for this node.
+*/
+{
+
+	return MPxNode::SchedulingType::kParallel;
 
 };
 

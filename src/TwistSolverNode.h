@@ -62,60 +62,62 @@ class TwistSolver : public MPxNode
 
 public:
 
-							TwistSolver();
-	virtual					~TwistSolver();
+										TwistSolver();
+	virtual								~TwistSolver();
 
-	virtual MStatus			compute(const MPlug& plug, MDataBlock& data);
+	virtual MStatus						compute(const MPlug& plug, MDataBlock& data);
 
-	static  void*			creator();
-	virtual	void			postConstructor();
+	virtual	MPxNode::SchedulingType		schedulingType() const;
 
-	static  MStatus			initialize();
-	virtual MStatus			initializeCurveRamp(MObject& node, MObject& attribute, const int index, const float position, const float value, const int interpolation);
+	static	MVector						getAxisVector(const MMatrix& matrix, const Axis axis, const bool flip, const bool normalize);
+	static	MVector						getAxisVector(const Axis axis, const bool flip);
 
-	static	MVector			getAxisVector(const MMatrix& matrix, const Axis axis, const bool flip, const bool normalize);
-	static	MVector			getAxisVector(const Axis axis, const bool flip);
+	static	MStatus						composeMatrix(const Axis forwardAxis, const MVector& forwardVector, const Axis upAxis, const MVector& upVector, const MPoint& pos, MMatrix& matrix);
+	static	MStatus						composeMatrix(const Axis forwardAxis, const MVector& forwardVector, const Axis upAxis, const MVector& upVector, MMatrix& matrix);
+	static	MMatrix						composeMatrix(const MVector& xAxis, const MVector& yAxis, const MVector& zAxis, const MPoint& position);
 
-	static	MStatus			composeMatrix(const Axis forwardAxis, const MVector& forwardVector, const Axis upAxis, const MVector& upVector, const MPoint& pos, MMatrix& matrix);
-	static	MStatus			composeMatrix(const Axis forwardAxis, const MVector& forwardVector, const Axis upAxis, const MVector& upVector, MMatrix& matrix);
-	static	MMatrix			composeMatrix(const MVector& xAxis, const MVector& yAxis, const MVector& zAxis, const MPoint& position);
+	static	MStatus						createCurveData(const MPoint& startPoint, const MVector& startVector, const MPoint& endPoint, const MVector& endVector, MObject &curveData);
+	static	MMatrix						transportMatrix(const MObject& curve, const Axis upAxis, const bool upAxisFlip, const MMatrix& matrix, MStatus* status);
+	static	MVector						projectVector(const MPoint& origin, const MVector& normal, const MVector& vector);
+	virtual	MDoubleArray				distributeRoll(const double roll, const unsigned int segments, const bool reverse);
 
-	static	MStatus			createCurveData(const MPoint& startPoint, const MVector& startVector, const MPoint& endPoint, const MVector& endVector, MObject &curveData);
-	static	MMatrix			transportMatrix(const MObject& curve, const Axis upAxis, const bool upAxisFlip, const MMatrix& matrix, MStatus* status);
-	static	MVector			projectVector(const MPoint& origin, const MVector& normal, const MVector& vector);
-	virtual	MDoubleArray	distributeRoll(const double roll, const unsigned int segments, const bool reverse);
+	static	double						degToRad(const double degrees);
+	static	double						radToDeg(const double radians);
 
-	static	double			degToRad(const double degrees);
-	static	double			radToDeg(const double radians);
+	static	bool						isClose(const double a, const double b);
+	static	bool						isClose(const double a, const double b, const double relativeTolerance, const double absoluteTolerance);
 
-	static	bool			isClose(const double a, const double b);
-	static	bool			isClose(const double a, const double b, const double relativeTolerance, const double absoluteTolerance);
+	static  void*						creator();
+	virtual	void						postConstructor();
+
+	static  MStatus						initialize();
+	virtual MStatus						initializeCurveRamp(MObject& node, MObject& attribute, const int index, const float position, const float value, const int interpolation);
 
 public:
 
-	static  MObject			forwardAxis;
-	static  MObject			forwardAxisFlip;
-	static  MObject			upAxis;
-	static  MObject			upAxisFlip;
-	static  MObject			startMatrix;
-	static  MObject			startOffsetMatrix;
-	static  MObject			endMatrix;
-	static	MObject			endOffsetMatrix;
-	static  MObject			inCurve;
-	static	MObject			segments;
-	static	MObject			inverse;
-	static	MObject			reverse;
-	static  MObject			falloff;
-	static  MObject			falloffEnabled;
+	static  MObject						forwardAxis;
+	static  MObject						forwardAxisFlip;
+	static  MObject						upAxis;
+	static  MObject						upAxisFlip;
+	static  MObject						startMatrix;
+	static  MObject						startOffsetMatrix;
+	static  MObject						endMatrix;
+	static	MObject						endOffsetMatrix;
+	static  MObject						inCurve;
+	static	MObject						segments;
+	static	MObject						inverse;
+	static	MObject						reverse;
+	static  MObject						falloff;
+	static  MObject						falloffEnabled;
 
-	static  MObject			twist;
-	static  MObject			roll;
-	static  MObject			debug;
+	static  MObject						twist;
+	static  MObject						roll;
+	static  MObject						debug;
 
-	static	MString			inputCategory;
-	static	MString			outputCategory;
+	static	MString						inputCategory;
+	static	MString						outputCategory;
 
-	static	MTypeId			id;
+	static	MTypeId						id;
 
 };
 
