@@ -160,10 +160,10 @@ Only these values should be used when performing computations!
 
 		// Build output array
 		//
-		MArrayDataHandle twistHandle = data.outputArrayValue(TwistSolver::twist, &status);
+		MArrayDataHandle twistArrayHandle = data.outputArrayValue(TwistSolver::twist, &status);
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 
-		MArrayDataBuilder builder(&data, TwistSolver::twist, segments, &status);
+		MArrayDataBuilder twistArrayBuilder(&data, TwistSolver::twist, segments, &status);
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 
 		double roll = (inverse) ? -angle : angle;
@@ -177,7 +177,7 @@ Only these values should be used when performing computations!
 
 			twist = MAngle(twists[i], MAngle::kRadians);
 
-			element = builder.addElement(i, &status);
+			element = twistArrayBuilder.addElement(i, &status);
 			CHECK_MSTATUS_AND_RETURN_IT(status);
 
 			element.setMAngle(twist);
@@ -185,10 +185,10 @@ Only these values should be used when performing computations!
 
 		}
 
-		status = twistHandle.set(builder);
+		status = twistArrayHandle.set(twistArrayBuilder);
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 
-		status = twistHandle.setAllClean();
+		status = twistArrayHandle.setAllClean();
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 
 		// Update data handle with array builder
